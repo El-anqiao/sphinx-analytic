@@ -8,42 +8,46 @@ include __DIR__.'/sphinxapi.php';
 
 $sc = new SphinxClient();
 $sc->setServer('localhost', 10003);
+$sc->setArrayResult(true);
 
 //$hosts = searchHosts($sc);
 //print_r($hosts);
 
-$url = 'http://sh.jiehun.com.cn/score/';
+$url = 'http://bj.jiehun.com.cn/hunshasheying/';
 $total = searchUrl($sc, $url);
-echo($url."\nnum:".$total."\n");
+echo "通过网址精确匹配：\n";
+echo($url."\nnum:".$total."\n\n");
 
 
-$url = 'http://bj.jiehun.com.cn/bbs/';
+
+$url = 'http://bj.jiehun.com.cn/zhimingsheying/*/map/';
 $total = searchPrefix($sc, $url);
-echo($url."\nprefix num:".$total."\n");
+echo "通过网址前缀匹配：\n$url\n";
+print_r($total);
+
 
 //$urls = sortByUrlHits($sc, 'gz.jiehun.com.cn');
+//echo "PV最高的网址：\n";
 //print_r($urls);
+//
+//$ips = sortByIpHits($sc, 'gz.jiehun.com.cn');
+//echo "访问量最高的IP：\n";
+//print_r($ips);
 
-////$sc->setLimits(0, 0);
-//$sc->setArrayResult(true);
-//$host = 'sh.jiehun.com.cn';
-//$host = crc32(strtolower($host));
-////$sc->addQuery('@host ^'.$host.'$', 'analytic');
-////$sc->addQuery('@url bbs', 'analytic');
-////$sc->addQuery('', 'analytic');
-//
-////$sc->setFilter('host', array($host));
-//$sc->setGroupBy('host', SPH_GROUPBY_ATTR, '@count desc');
-//
-//var_dump($sc->query('', 'analytic'));
-////var_dump($sc->RunQueries());
+
 
 /**
  * 搜索指定url的查询次数
+ * @param $sc
  * @param $url
+ * @throws
+ * @return int
  */
 function searchUrl($sc, $url)
 {
+    $sc->resetFilters();
+    $sc->resetGroupBy();
+
     $info = parse_url($url);
     if (!$info || !isset($info['host'])) {
         throw new Exception('url illegal');
@@ -52,8 +56,8 @@ function searchUrl($sc, $url)
     $host = packHost($info['host']);
     $path = packPath($info['path']);
 
-    $sc->setMatchMode(SPH_MATCH_BOOLEAN);
     $sc->setLimits(0, 0);
+    $sc->setMatchMode(SPH_MATCH_EXTENDED);
     $sc->setFilter('host', array($host));
     $sc->setFilter('url', array($path));
     $ret = $sc->query('', SEARCH_INDEX);
@@ -62,48 +66,126 @@ function searchUrl($sc, $url)
 
 /**
  * 搜索指定前缀的网址的查询次数
- * @param $prefix
+ * @param $sc
+ * @param $url
+ * @throws
+ * @return int
  */
 function searchPrefix($sc, $url)
 {
+    $sc->resetFilters();
+    $sc->resetGroupBy();
+
     $info = parse_url($url);
     if (!$info || !isset($info['host'])) {
         throw new Exception('url illegal');
     }
 
     $host = packHost($info['host']);
+    $maxNum = 20;
 
     $sc->setMatchMode(SPH_MATCH_EXTENDED);
-//    $sc->setLimits(0, 0);
-//    $sc->setFilter('host', array($host));
+    $sc->setLimits(0, $maxNum);
+
     $path = packSearchPath($info['path']);
+
+    $sc->setFilter('host', array($host));
     $sc->setGroupBy('url', SPH_GROUPBY_ATTR, '@count desc');
     $ret = $sc->query('@purl '.$path, SEARCH_INDEX);
-    var_dump($path, $ret);
-    if ($ret) {
-        $ret = $ret[0];
+
+    $num = $ret['total_found'];
+    $list = array();
+
+    $total = 0;
+    if ($num > 0) {
+        $tmpTotal = 0;
+        foreach($ret['matches'] as $row) {
+            $list[] = array(
+                'id' => $row['id'],
+                'url' => $row['attrs']['url'],
+                'count' => $row['attrs']['@count'],
+            );
+            $tmpTotal += $row['attrs']['@count'];
+        }
+        if ($num > $maxNum) {
+            $total = $tmpTotal + '+';
+        } else {
+            $total = $tmpTotal;
+        }
     }
-    return $ret['total_found'];
+    return array(
+        'host' => $info['host'],
+        'prefix' => $info['path'],
+        'total' => $total,
+        'list'  => $list,
+    );
 }
 
-
+/**
+ * 通过pv进行排序
+ * @param $sc
+ * @param $host
+ * @return array
+ */
 function sortByUrlHits($sc, $host)
 {
-    $host = packHost($host);
+    $sc->resetFilters();
+    $sc->resetGroupBy();
 
+    $host = packHost($host);
+    $sc->setLimits(0, 20);
     $sc->setMatchMode(SPH_MATCH_BOOLEAN);
     $sc->setFilter('host', array($host));
     $sc->setGroupBy('url', SPH_GROUPBY_ATTR, '@count desc');
     $ret = $sc->query('', SEARCH_INDEX);
-    if (!$ret) {
+    if (!$ret || !$ret['total_found']) {
         return array();
     }
     $urls = array();
     foreach($ret['matches'] as $row) {
-        $url = $row['attrs']['url'];
-        $urls[$url] = $row['attrs']['@count'];
+        $urls[] = array(
+            'id' => $row['id'],
+            'url' => $row['attrs']['url'],
+            'count' => $row['attrs']['@count'],
+        );
     }
     return $urls;
+}
+
+/**
+ * 按ip浏览数排序
+ * @param $sc
+ * @param $host
+ * @return array
+ */
+function sortByIpHits($sc, $host)
+{
+    $sc->resetFilters();
+    $sc->resetGroupBy();
+
+    $host = packHost($host);
+    $sc->setLimits(0, 20);
+    $sc->setMatchMode(SPH_MATCH_BOOLEAN);
+    $sc->setFilter('host', array($host));
+    $sc->setGroupBy('ip', SPH_GROUPBY_ATTR, '@count desc');
+    $ret = $sc->query('', SEARCH_INDEX);
+
+    $ips = array();
+    if ($ret && $ret['total_found']) {
+        foreach($ret['matches'] as $row) {
+            $ip = $row['attrs']['ip'];
+            if ($ip < 0) {
+                $ip = sprintf('%u', $ip);
+            }
+            $ip = long2ip($ip);
+            $ips[] = array(
+                'id' => $row['id'],
+                'ip' => $ip,
+                'count' => $row['attrs']['@count'],
+            );
+        }
+    }
+    return $ips;
 }
 
 /**
@@ -113,11 +195,14 @@ function sortByUrlHits($sc, $host)
  */
 function searchHosts($sc)
 {
+    $sc->resetFilters();
+    $sc->resetGroupBy();
+
     $sc->setMatchMode(SPH_MATCH_BOOLEAN);
     $sc->setArrayResult(true);
     $sc->setGroupBy('host', SPH_GROUPBY_ATTR, '@count desc');
     $ret = $sc->query('', SEARCH_INDEX);
-    if (!$ret) {
+    if (!$ret|| !$ret['total_found']) {
         return array();
     }
 

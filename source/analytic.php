@@ -12,9 +12,8 @@ $hostsPath = dirname(__DIR__).'/shell/hosts.php';
 
 $hosts = array();
 
-$fh = fopen($path, 'r');
 
-echo '<?xml version="1.0" encoding="utf-8"?>';
+echo '<?xml version="1.0" encoding="utf-8"?>'."\n";
 echo '<sphinx:docset>';
 
 echo <<<SCHEMA
@@ -31,6 +30,7 @@ SCHEMA;
 
 $id = 1000;
 
+$fh = fopen($path, 'r');
 while ( ($line = fgets($fh)) !== false) {
     $line = trim($line);
     if (!$line) {
@@ -125,7 +125,7 @@ function writeDoc($id, $data) {
                 printf("<%s>%s</%s>\n", $key, $value, $key);
             }
         } else {
-            printf("<%s><![CDATA[%s]]></%s>\n", $key, implode(',', $value), $key);
+            printf("<%s>%s</%s>\n", $key, implode(',', $value), $key);
         }
     }
     echo "</sphinx:document>\n";

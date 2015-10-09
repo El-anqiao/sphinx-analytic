@@ -30,15 +30,33 @@ function packPath($path)
  * @param $path
  * @return array
  */
-function packPrefix(string $path)
+function packPrefix($path)
 {
-    $path = str_replace('_', '__', trim($path, '/'));
+    $path = trim($path, '/');
     $arr = explode('/', $path);
     $ret = array();
-    for($i = 0, $l = count($arr); $i < $l; $i++) {
-        $sliceArr = array_slice($arr, 0, $i + 1);
-        $ret[] = implode('_', $sliceArr).'_';
+
+    $sliceArr = array();
+    $sliceUnifiedArr = array();
+    $l = count($arr);
+    for($i = 0; $i < $l; $i++) {
+        $sliceArr[] = $arr[$i];
+        $sliceUnifiedArr[] = preg_replace('#\d{1,}#', '*', $arr[$i]);
+
+        $ret[] = implode('/', $sliceArr);
+
+        if ($i > 0 && $i < $l && strpos($sliceUnifiedArr[$i - 1],'*') !== false) {
+            $ret[] = implode('/', $sliceUnifiedArr);
+        }
     }
+    if (preg_match('#(.+)_p\d+$#', $sliceArr[$l - 1], $ms)) {
+        $sliceArr[$l - 1] = $ms[1];
+        $ret[] = implode('/', $sliceArr);
+    }
+    if (strpos($sliceUnifiedArr[$l - 1], '*') !== false) {
+        $ret[] = implode('/', $sliceUnifiedArr);
+    }
+    $ret = array_map('crc32', $ret);
     return $ret;
 }
 
@@ -48,7 +66,5 @@ function packPrefix(string $path)
  * @return string
  */
 function packSearchPath($path) {
-    $path = str_replace('_', '__', trim($path, '/'));
-    $arr = explode('/', $path);
-    return implode('_', $arr).'_';
+    return crc32(trim($path, '/'));
 }
