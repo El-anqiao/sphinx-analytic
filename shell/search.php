@@ -12,13 +12,17 @@ $sc->setServer('localhost', 10003);
 //$hosts = searchHosts($sc);
 //print_r($hosts);
 
-//$url = 'http://sh.jiehun.com.cn/score/';
-//$total = searchUrl($sc, $url);
-//echo($url."\nnum:".$total."\n");
+$url = 'http://sh.jiehun.com.cn/score/';
+$total = searchUrl($sc, $url);
+echo($url."\nnum:".$total."\n");
 
 
-$urls = sortByUrlHits($sc, 'gz.jiehun.com.cn');
-print_r($urls);
+$url = 'http://bj.jiehun.com.cn/bbs/';
+$total = searchPrefix($sc, $url);
+echo($url."\nprefix num:".$total."\n");
+
+//$urls = sortByUrlHits($sc, 'gz.jiehun.com.cn');
+//print_r($urls);
 
 ////$sc->setLimits(0, 0);
 //$sc->setArrayResult(true);
@@ -51,11 +55,8 @@ function searchUrl($sc, $url)
     $sc->setMatchMode(SPH_MATCH_BOOLEAN);
     $sc->setLimits(0, 0);
     $sc->setFilter('host', array($host));
-    $sc->addQuery('@url '.$path, SEARCH_INDEX);
-    $ret = $sc->runQueries();
-    if ($ret) {
-        $ret = $ret[0];
-    }
+    $sc->setFilter('url', array($path));
+    $ret = $sc->query('', SEARCH_INDEX);
     return $ret['total_found'];
 }
 
@@ -63,9 +64,26 @@ function searchUrl($sc, $url)
  * 搜索指定前缀的网址的查询次数
  * @param $prefix
  */
-function searchPrefix($prefix)
+function searchPrefix($sc, $url)
 {
+    $info = parse_url($url);
+    if (!$info || !isset($info['host'])) {
+        throw new Exception('url illegal');
+    }
 
+    $host = packHost($info['host']);
+
+    $sc->setMatchMode(SPH_MATCH_EXTENDED);
+//    $sc->setLimits(0, 0);
+//    $sc->setFilter('host', array($host));
+    $path = packSearchPath($info['path']);
+    $sc->setGroupBy('url', SPH_GROUPBY_ATTR, '@count desc');
+    $ret = $sc->query('@purl '.$path, SEARCH_INDEX);
+    var_dump($path, $ret);
+    if ($ret) {
+        $ret = $ret[0];
+    }
+    return $ret['total_found'];
 }
 
 

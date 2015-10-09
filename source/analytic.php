@@ -20,11 +20,13 @@ echo '<sphinx:docset>';
 echo <<<SCHEMA
 <sphinx:schema>
     <sphinx:field name="rhost"></sphinx:field>
+    <sphinx:field name="purl"></sphinx:field>
     <sphinx:attr name="url" type="int"></sphinx:attr>
     <sphinx:attr name="host" type="int"></sphinx:attr>
     <sphinx:attr name="time" type="timestamp"></sphinx:attr>
     <sphinx:attr name="ip" type="bigint"></sphinx:attr>
 </sphinx:schema>
+
 SCHEMA;
 
 $id = 1000;
@@ -62,6 +64,7 @@ while ( ($line = fgets($fh)) !== false) {
         continue;
     }
     $row['host'] = packHost($info['host']);
+    $row['purl'] = packPrefix($info['path']);
 
     if (!isset($hosts[$row['host']])) {
         $hosts[$row['host'].''] = strtolower($info['host']);
@@ -112,7 +115,7 @@ file_put_contents($hostsPath, "<?php\nreturn ".var_export($hosts, true).';');
 function writeDoc($id, $data) {
     echo "<sphinx:document id=\"{$id}\">\n";
     foreach($data as $key => $value) {
-        if ($key == 'referer' || $key == 'ua') {
+        if ($key == 'referer' || $key == 'ua' || $key == 'qs') {
             continue;
         }
         if (!is_array($value)) {
@@ -121,6 +124,8 @@ function writeDoc($id, $data) {
             } else {
                 printf("<%s>%s</%s>\n", $key, $value, $key);
             }
+        } else {
+            printf("<%s><![CDATA[%s]]></%s>\n", $key, implode(',', $value), $key);
         }
     }
     echo "</sphinx:document>\n";
