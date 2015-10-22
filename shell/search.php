@@ -25,6 +25,9 @@ $total = searchPrefix($sc, $url);
 echo "通过网址前缀匹配：\n$url\n";
 print_r($total);
 
+$rhosts = sortByRefererHits($sc, 'gz.jiehun.com.cn');
+echo "访问次数最多的来源网站：\n";
+print_r($rhosts);
 
 //$urls = sortByUrlHits($sc, 'gz.jiehun.com.cn');
 //echo "PV最高的网址：\n";
@@ -189,6 +192,48 @@ function sortByIpHits($sc, $host)
 }
 
 /**
+ * 通过来源进行排序
+ * @param $sc
+ * @param $host
+ */
+function sortByRefererHits($sc, $host)
+{
+    $sc->resetFilters();
+    $sc->resetGroupBy();
+
+    $host = packHost($host);
+    $sc->setLimits(0, 20);
+    $sc->setMatchMode(SPH_MATCH_BOOLEAN);
+    $sc->setFilter('host', array($host));
+    $sc->setGroupBy('rhost', SPH_GROUPBY_ATTR, '@count desc');
+    $ret = $sc->query('', SEARCH_INDEX);
+
+    $rhosts = array();
+    $hostsMap = include __DIR__.'/hosts.php';
+    if ($ret && $ret['total_found']) {
+        foreach($ret['matches'] as $row) {
+            $rhost = $row['attrs']['rhost'];
+
+            if (!$rhost) {
+                $hostName = '直达';
+            } elseif (isset($hostsMap[$rhost])) {
+                $hostName = $hostsMap[$rhost];
+            } else {
+                $hostName = '未知:'.$rhost;
+            }
+
+            $rhosts[] = array(
+                'id' => $row['id'],
+                'host' => $hostName,
+                'count' => $row['attrs']['@count'],
+            );
+
+        }
+    }
+    return $rhosts;
+}
+
+/**
  * 搜索每个主机分别有多少次请求
  * @param $sc
  * @return array
@@ -211,9 +256,12 @@ function searchHosts($sc)
     foreach($ret['matches'] as $row) {
         $host = $row['attrs']['host'];
         if (isset($hostsMap[$host])) {
-            $hosts[$hostsMap[$host]] = $row['attrs']['@count'];
+            $hosts[] = array(
+                'id' => $row['id'],
+                'host' => $hostsMap[$host],
+                'count' => $row['attrs']['@count'],
+            );
         }
     }
     return $hosts;
 }
-
